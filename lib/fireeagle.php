@@ -14,10 +14,21 @@
 
 NOTES:
 
-- You'll probably need PHP 5.2.3+ for this to work.
+- You'll probably need PHP 5.2.3+.  If you find you don't have the
+  hash_hmac() function, see here for a pure PHP version:
 
-- To get HTTPS working on Windows:
-  http://www.vividreflection.com/blog/secret-to-curl-in-php-on-windows/
+    http://laughingmeme.org/code/hmacsha1.php.txt
+
+- To get HTTPS working on Windows, download curl-ca-bundle.crt from
+  here:
+
+    http://curl.haxx.se/latest.cgi?curl=win32-ssl
+
+  Then add this line after the curl_init() call in the
+  Fireeagle::http() function, replacing c:/web with the path of the
+  folder containing curl-ca-bundle.crt:
+
+    curl_setopt($ch, CURLOPT_CAINFO, 'c:/web/curl-ca-bundle.crt');
 
 */
 
