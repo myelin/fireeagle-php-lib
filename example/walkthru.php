@@ -18,6 +18,7 @@ function main() {
  
 	if (@$_GET['f'] == 'start') {
 		// get a request token + secret from FE and redirect to the authorization page
+		// START step 1
 		$fe = new FireEagle($fe_key, $fe_secret);
 		$tok = $fe->getRequestToken();
 		if (!isset($tok['oauth_token'])
@@ -31,8 +32,10 @@ function main() {
 		$_SESSION['request_token'] = $token = $tok['oauth_token'];
 		$_SESSION['request_secret'] = $tok['oauth_token_secret'];
 		header("Location: ".$fe->getAuthorizeURL($token));
+		// END step 1
 	} else if (@$_GET['f'] == 'callback') {
 		// the user has authorized us at FE, so now we can pick up our access token + secret
+		// START step 2
 		if (@$_SESSION['auth_state'] != "start") {
 			echo "Out of sequence.";
 			exit;
@@ -55,8 +58,10 @@ function main() {
 		$_SESSION['access_secret'] = $tok['oauth_token_secret'];
 		$_SESSION['auth_state'] = "done";
 		header("Location: ".$_SERVER['SCRIPT_NAME']);
+		// END step 2
 	} else if (@$_SESSION['auth_state'] == 'done') {
 		// we have our access token + secret, so now we can actually *use* the api
+		// START step 3
 		$fe = new FireEagle($fe_key, $fe_secret, $_SESSION['access_token'], $_SESSION['access_secret']);
 
 		// handle postback for location update
@@ -122,7 +127,7 @@ function main() {
 			</form><?php
 
 		}
-
+		// END step 3
 	} else {
 		// not authenticated yet, so give a link to use to start authentication.
 		?><p><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) ?>?f=start">Click here to authenticate with Fire Eagle!</a></p><?php
