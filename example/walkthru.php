@@ -125,7 +125,7 @@ function main() {
 
 	} else {
 		// not authenticated yet, so give a link to use to start authentication.
-		?><p><a href="<?php echo $_SERVER['PHP_SELF'] ?>?f=start">Click here to authenticate with Fire Eagle!</a></p><?php
+		?><p><a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) ?>?f=start">Click here to authenticate with Fire Eagle!</a></p><?php
 	}
 }
 
