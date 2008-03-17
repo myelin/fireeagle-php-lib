@@ -155,14 +155,14 @@ class FireEagle {
 	switch ($loc->geometry->type) {
 	case 'Box': // DEPRECATED
 	  $loc->bbox = $c;
-	  $loc->latitude = ($c[0][0] + $c[1][0]) / 2;
-	  $loc->longitude = ($c[0][1] + $c[1][1]) / 2;
+	  $loc->longitude = ($c[0][0] + $c[1][0]) / 2;
+	  $loc->latitude = ($c[0][1] + $c[1][1]) / 2;
 	  $loc->geotype = 'box';
 	  break;
 	case 'Polygon':
 	  $loc->bbox = $bbox = $loc->geometry->bbox;
-	  $loc->latitude = ($bbox[0][0] + $bbox[1][0]) / 2;
-	  $loc->longitude = ($bbox[0][1] + $bbox[1][1]) / 2;
+	  $loc->longitude = ($bbox[0][0] + $bbox[1][0]) / 2;
+	  $loc->latitude = ($bbox[0][1] + $bbox[1][1]) / 2;
 	  $loc->geotype = 'box';
 	  break;
 	case 'Point':
