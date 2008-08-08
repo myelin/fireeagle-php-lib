@@ -21,11 +21,9 @@ NOTES:
 
     http://curl.haxx.se/latest.cgi?curl=win32-ssl
 
-  Then add this line after the curl_init() call in the
-  Fireeagle::http() function, replacing c:/web with the path of the
-  folder containing curl-ca-bundle.crt:
+  Then let this library know where it is like this:
 
-    curl_setopt($ch, CURLOPT_CAINFO, 'c:/web/curl-ca-bundle.crt');
+    define('CURL_CA_BUNDLE_PATH', 'c:/web/curl-ca-bundle.crt');
 
 */
 
@@ -33,8 +31,10 @@ NOTES:
 require_once(dirname(__FILE__)."/OAuth.php");
 
 if (!function_exists("hash_hmac")) {
+  // Earlier versions of PHP5 are missing hash_hmac().  Here's a
+  // pure-PHP version in case you're using one of them.
   function hash_hmac($algo, $data, $key) {
-    // thanks kellan: http://laughingmeme.org/code/hmacsha1.php.txt
+    // Thanks, Kellan: http://laughingmeme.org/code/hmacsha1.php.txt
     if ($algo != 'sha1') throw new Exception("fireeagle.php's hash_hmac() can only do sha1, sorry");
 
     $blocksize = 64;
@@ -93,11 +93,7 @@ class FireEagleException extends Exception {
   const REMOTE_RATE_LIMITING = 32; // Rate limit/IP Block due to excessive requests.
   const REMOTE_INTERNAL_ERROR = 50; // Internal error occurred; try again later.
 
-
   public $response; // for REMOTE_ERROR codes, this is the response from FireEagle (useful: $response->code and $response->message)
-
-  // Values of $this->response->code:
-  const UPDATE_NOT_PERMITTED = 1;
 
   function __construct($msg, $code, $response=null) {
     parent::__construct($msg, $code);
@@ -176,19 +172,24 @@ class FireEagle {
   public function getRequestToken() {
     $r = $this->oAuthRequest($this->requestTokenURL());
     $token = $this->oAuthParseResponse($r);
+    $this->token = new OAuthConsumer($token['oauth_token'], $token['oauth_token_secret']); // use this token from now on
     if (self::$FE_DUMP_REQUESTS) self::dump("Now the user is redirected to ".$this->getAuthorizeURL($token['oauth_token'])."\nOnce the user returns, via the callback URL for web authentication or manually for desktop authentication, we can get their access token and secret by calling /oauth/access_token.\n\n");
     return $token;
   }
+  public function request_token() { return $this->getRequestToken(); }
 
   /**
    * Get the URL to redirect to to authorize the user and validate a
    * request token.
    *
-   * @returns a string containing the URL  to redirect to.
+   * @returns a string containing the URL to redirect to.
    */
   public function getAuthorizeURL($token) {
+    // $token can be a string, or an array in the format returned by getRequestToken().
+    if (is_array($token)) $token = $token['oauth_token'];
     return $this->authorizeURL() . '?oauth_token=' . $token;
   }
+  public function authorize($token) { return $this->getAuthorizeURL($token); }
   
   /**
    * Exchange the request token and secret for an access token and
@@ -198,11 +199,14 @@ class FireEagle {
    * @returns array("oauth_token" => the access token,
    *                "oauth_token_secret" => the access secret)
    */
-  public function getAccessToken() {
+  public function getAccessToken($token=NULL) {
     $this->requireToken();
     $r = $this->oAuthRequest($this->accessTokenURL());
-    return $this->oAuthParseResponse($r);
+    $token = $this->oAuthParseResponse($r);
+    $this->token = new OAuthConsumer($token['oauth_token'], $token['oauth_token_secret']); // use this token from now on
+    return $token;
   }
+  public function access_token() { return $this->getAccessToken(); }
 
   /**
    * Generic method call function.  You can use this to get the raw
@@ -275,6 +279,7 @@ class FireEagle {
    * as a generic geocoder).
    */
   public function lookup($args=array()) {
+    if (!is_array($args)) throw new FireEagleException("\$args parameter to FireEagle::lookup() should be an array", FireEagleException::LOCATION_REQUIRED);
     if (empty($args)) throw new FireEagleException("FireEagle::lookup() needs a location", FireEagleException::LOCATION_REQUIRED);
     return $this->call("lookup", $args);
   }
@@ -352,6 +357,7 @@ class FireEagle {
       }
     }
     $ch = curl_init();
+    if (defined("CURL_CA_BUNDLE_PATH")) curl_setopt($ch, CURLOPT_CAINFO, CURL_CA_BUNDLE_PATH);
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
