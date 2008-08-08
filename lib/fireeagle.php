@@ -14,10 +14,7 @@
 
 NOTES:
 
-- You'll probably need PHP 5.2.3+.  If you find you don't have the
-  hash_hmac() function, see here for a pure PHP version:
-
-    http://laughingmeme.org/code/hmacsha1.php.txt
+- You'll probably need PHP 5.2.3+.
 
 - To get HTTPS working on Windows, download curl-ca-bundle.crt from
   here:
@@ -35,6 +32,31 @@ NOTES:
 // Requires OAuth.php from http://oauth.googlecode.com/svn/code/php/OAuth.php
 require_once(dirname(__FILE__)."/OAuth.php");
 
+if (!function_exists("hash_hmac")) {
+  function hash_hmac($algo, $data, $key) {
+    // thanks kellan: http://laughingmeme.org/code/hmacsha1.php.txt
+    if ($algo != 'sha1') throw new Exception("fireeagle.php's hash_hmac() can only do sha1, sorry");
+
+    $blocksize = 64;
+    $hashfunc = 'sha1';
+    if (strlen($key)>$blocksize)
+      $key = pack('H*', $hashfunc($key));
+    $key = str_pad($key,$blocksize,chr(0x00));
+    $ipad = str_repeat(chr(0x36),$blocksize);
+    $opad = str_repeat(chr(0x5c),$blocksize);
+    $hmac = pack(
+      'H*',$hashfunc(
+	($key^$opad).pack(
+	  'H*',$hashfunc(
+	    ($key^$ipad).$data
+	    )
+	  )
+	)
+      );
+    return $hmac;
+  }
+}
+
 // Various things that can go wrong
 class FireEagleException extends Exception {
   const TOKEN_REQUIRED = 1; // call missing an oauth request/access token
@@ -42,6 +64,34 @@ class FireEagleException extends Exception {
   const REMOTE_ERROR = 3; // FE sent an error
   const REQUEST_FAILED = 4; // empty or malformed response from FE
   const CONNECT_FAILED = 5; // totally failed to make an HTTP request
+  const INTERNAL_ERROR = 6; // totally failed to make an HTTP request
+
+  const REMOTE_SUCCESS = 0; // Request succeeded.
+  const REMOTE_UPDATE_PROHIBITED = 1; // Update not permitted for that user.
+  const REMOTE_UPDATE_ONLY = 2; // Update successful, but read access prohibited.
+  const REMOTE_QUERY_PROHIBITED = 3; // Query not permitted for that user.
+  const REMOTE_SUSPENDED = 4; // User account is suspended.
+  const REMOTE_PLACE_NOT_FOUND = 6; // Place can't be identified.
+  const REMOTE_USER_NOT_FOUND = 7; // Authentication token can't be matched to a user.
+  const REMOTE_INVALID_QUERY = 8; // Invalid location query.
+  const REMOTE_IS_FROB = 10; // Token provided is a request token, not an auth token.
+  const REMOTE_NOT_VALIDATED = 11; // Request token has not been validated.
+  const REMOTE_REQUEST_TOKEN_REQUIRED = 12; // Token provided must be an access token.
+  const REMOTE_EXPIRED = 13; // Token has expired.
+  const REMOTE_GENERAL_TOKEN_REQUIRED = 14; // Token provided must be an general purpose token.
+  const REMOTE_UNKNOWN_CONSUMER = 15; // Unknown consumer key.
+  const REMOTE_UNKNOWN_TOKEN = 16; // Token not found.
+  const REMOTE_BAD_IP_ADDRESS = 17; // Request made from non-blessed ip address.
+  const REMOTE_OAUTH_CONSUMER_KEY_REQUIRED = 20; // oauth_consumer_key parameter required.
+  const REMOTE_OAUTH_TOKEN_REQUIRED = 21; // oauth_token parameter required.
+  const REMOTE_BAD_SIGNATURE_METHOD = 22; // Unsupported signature method.
+  const REMOTE_INVALID_SIGNATURE = 23; // Invalid OAuth signature.
+  const REMOTE_REPEATED_NONCE = 24; // Provided nonce has been seen before.
+  const REMOTE_YAHOOAPIS_REQUIRED = 30; // All api methods should use fireeagle.yahooapis.com.
+  const REMOTE_SSL_REQUIRED = 31; // SSL / https is required.
+  const REMOTE_RATE_LIMITING = 32; // Rate limit/IP Block due to excessive requests.
+  const REMOTE_INTERNAL_ERROR = 50; // Internal error occurred; try again later.
+
 
   public $response; // for REMOTE_ERROR codes, this is the response from FireEagle (useful: $response->code and $response->message)
 
@@ -197,12 +247,21 @@ class FireEagle {
     return $this->call("lookup", $args);
   }
 
+  /**
+   * Wrapper for 'recent' API method
+   */
+  public function recent() {
+    return $this->call("recent");
+  }
+
   // --- Internal bits and pieces ---
 
   protected function parseJSON($json) {
     $r = json_decode($json);
     if (empty($r)) throw new FireEagleException("Empty JSON response", FireEagleException::REQUEST_FAILED);
-    if ($r->stat != 'ok') throw new FireEagleException($r->code.": ".$r->message, FireEagleException::REMOTE_ERROR, $r);
+    if (isset($r->rsp) && $r->rsp->stat != 'ok') {
+      throw new FireEagleException($r->rsp->code.": ".$r->rsp->message, FireEagleException::REMOTE_ERROR, $r->rsp);
+    }
     return $r;
   }
 
@@ -239,7 +298,7 @@ class FireEagle {
       self::dump("\n\nBase string: ".$req->base_string."\nSignature string: $k\n");
     }
     switch ($method) {
-    case 'GET': return $this->http($req);
+    case 'GET': return $this->http($req->to_url());
     case 'POST': return $this->http($req->get_normalized_http_url(), $req->to_postdata());
     }
   }
@@ -271,13 +330,20 @@ class FireEagle {
     }
     $response = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    if ($ct) $ct = preg_replace("/;.*/", "", $ct); // strip off charset
     if (!$status) throw new FireEagleException("Connection to $url failed", FireEagleException::CONNECT_FAILED);
     if ($status != 200) {
+      if ($ct == "application/json") {
+	$r = json_decode($response);
+	if ($r && isset($r->rsp) && $r->rsp->stat != 'ok') {
+	  throw new FireEagleException($r->rsp->code.": ".$r->rsp->message, FireEagleException::REMOTE_ERROR, $r->rsp);
+	}
+      }
       throw new FireEagleException("Request to $url failed: HTTP error $status ($response)", FireEagleException::REQUEST_FAILED);
     }
     if (self::$FE_DUMP_REQUESTS) {
       self::dump("HTTP/1.0 $status OK\n");
-      $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
       if ($ct) self::dump("Content-Type: $ct\n");
       $cl = curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
       if ($cl) self::dump("Content-Length: $cl\n");
