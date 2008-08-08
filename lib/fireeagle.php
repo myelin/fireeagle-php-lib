@@ -65,6 +65,7 @@ class FireEagleException extends Exception {
   const REQUEST_FAILED = 4; // empty or malformed response from FE
   const CONNECT_FAILED = 5; // totally failed to make an HTTP request
   const INTERNAL_ERROR = 6; // totally failed to make an HTTP request
+  const CONFIG_READ_ERROR = 7; // can't find or parse fireeaglerc
 
   const REMOTE_SUCCESS = 0; // Request succeeded.
   const REMOTE_UPDATE_PROHIBITED = 1; // Update not permitted for that user.
@@ -133,6 +134,37 @@ class FireEagle {
     } else {
       $this->token = NULL;
     }
+  }
+
+  // read consumer key and secret, and optionally fireeagle auth and api urls, from a .fireeaglerc file
+  public static function from_fireeaglerc($fn, $token=null, $secret=null) {
+    $text = @file_get_contents($fn);
+    if ($text === false) throw new FireEagleException("Could not read $fn", FireEagleException::CONFIG_READ_ERROR);
+    $info = array();
+    foreach (preg_split("/\n/", $text) as $line) {
+      $line = trim(preg_replace("/#.*/", "", $line));
+      if (empty($line)) continue;
+      if (!preg_match("/^([^\s=]+)\s*\=\s*(.*)$/", $line, $m)) throw new FireEagleException("Failed to parse line '$line' in $fn", FireEagleException::CONFIG_READ_ERROR);
+      list(, $k, $v) = $m;
+      $info[$k] = $v;
+    }
+
+    if (empty($info['consumer_key'])) throw new FireEagleException("Missing consumer_key in $fn", FireEagleException::CONFIG_READ_ERROR);
+    if (empty($info['consumer_secret'])) throw new FireEagleException("Missing consumer_secret in $fn", FireEagleException::CONFIG_READ_ERROR);
+
+    if (isset($info['api_server'])) self::$FE_API_ROOT = self::build_server_url($info, 'api');
+    if (isset($info['auth_server'])) self::$FE_ROOT = self::build_server_url($info, 'auth');
+
+    return new FireEagle($info['consumer_key'], $info['consumer_secret'], $token, $secret);
+  }
+
+  private static function build_server_url($info, $role) {
+    $proto = isset($info["${role}_protocol"]) ? $info["${role}_protocol"] : 'https';
+    $default_port = ($proto == 'https' ? 443 : 80);
+    $port = isset($info["${role}_port"]) ? $info["${role}_port"] : $default_port;
+    $url = $proto . "://" . $info["${role}_server"];
+    if ($port != $default_port) $url .= ":" . $port;
+    return $url;
   }
 
   /**
@@ -365,4 +397,3 @@ class FireEagle {
 
 }
 
-?>
