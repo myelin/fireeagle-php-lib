@@ -219,9 +219,9 @@ class FireEagle {
    *     or $fe->update(array("q" => "new york, new york"))
    */
 
-  public function call($method, $params=array()) {
+  public function call($method, $params=array(), $request_method=NULL) {
     $this->requireToken();
-    $r = $this->oAuthRequest($this->methodURL($method), $params);
+    $r = $this->oAuthRequest($this->methodURL($method), $params, $request_method);
     return $this->parseJSON($r);
   }
 
@@ -281,14 +281,16 @@ class FireEagle {
   public function lookup($args=array()) {
     if (!is_array($args)) throw new FireEagleException("\$args parameter to FireEagle::lookup() should be an array", FireEagleException::LOCATION_REQUIRED);
     if (empty($args)) throw new FireEagleException("FireEagle::lookup() needs a location", FireEagleException::LOCATION_REQUIRED);
-    return $this->call("lookup", $args);
+    return $this->call("lookup", $args, "GET");
   }
 
   /**
    * Wrapper for 'recent' API method
    */
-  public function recent() {
-    return $this->call("recent");
+  public function recent($since=NULL) {
+    if (empty($since)) return $this->call("recent");
+
+    return $this->call("recent", array("since" => $since), "GET");
   }
 
   // --- Internal bits and pieces ---
@@ -320,8 +322,8 @@ class FireEagle {
   }
 
   // Format and sign an OAuth / API request
-  function oAuthRequest($url, $args=array()) {
-    $method = empty($args) ? "GET" : "POST";
+  function oAuthRequest($url, $args=array(), $method=NULL) {
+    if (empty($method)) $method = empty($args) ? "GET" : "POST";
     $req = OAuthRequest::from_consumer_and_token($this->consumer, $this->token, $method, $url, $args);
     $req->sign_request($this->sha1_method, $this->consumer, $this->token);
     if (self::$FE_DEBUG) {
