@@ -1,0 +1,19 @@
+The Official Fire Eagle PHP Library
+===================================
+  Phillip Pearson and David Ayman Shamma
+  http://fireeagle.yahoo.net/developer/code/php
+  http://github.com/myelin/fireeagle-php-lib
+
+Usage
+=====
+
+See example/walkthru.php for an example of using the library in a web
+application.
+
+See test/test.php for an example of using the library for a desktop or
+command-line application.
+
+License
+=======
+
+Modified BSD license.
