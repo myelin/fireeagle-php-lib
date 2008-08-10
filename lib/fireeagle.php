@@ -287,10 +287,21 @@ class FireEagle {
   /**
    * Wrapper for 'recent' API method
    */
-  public function recent($since=NULL) {
-    if (empty($since)) return $this->call("recent");
+  public function recent($since=NULL, $per_page=NULL, $page=NULL) {
+    $params = array(
+		    "per_page" => ($per_page === NULL) ? 10 : $per_page,
+		    "page" => ($page === NULL) ? 1 : $page,
+		    );
+    if (!empty($since)) $params['time'] = $since;
 
-    return $this->call("recent", array("since" => $since), "GET");
+    return $this->call("recent", $params, "GET");
+  }
+
+  /**
+   * Wrapper for 'within' API method
+   */
+  public function within($params=array()) {
+    return $this->call("within", $params, "GET");
   }
 
   // --- Internal bits and pieces ---
