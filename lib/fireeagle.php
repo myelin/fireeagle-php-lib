@@ -16,14 +16,13 @@ NOTES:
 
 - You'll probably need PHP 5.2.3+.
 
-- To get HTTPS working on Windows, download curl-ca-bundle.crt from
-  here:
+- To get HTTPS working on Windows, download cacert.pem from here:
 
-    http://curl.haxx.se/latest.cgi?curl=win32-ssl
+    http://curl.haxx.se/ca/cacert.pem
 
   Then let this library know where it is like this:
 
-    define('CURL_CA_BUNDLE_PATH', 'c:/web/curl-ca-bundle.crt');
+    define('CURL_CA_BUNDLE_PATH', 'c:/web/cacert.pem');
 
 */
 
