@@ -111,6 +111,14 @@ class FireEagle {
   public static $FE_DEBUG = false; // set to true to print out debugging info
   public static $FE_DUMP_REQUESTS = false; // set to a pathname to dump out http requests to a log
 
+  // Set FireEagle::$FE_PROXY_HOST and $FE_PROXY_PORT to use an HTTP proxy
+  public static $FE_PROXY_HOST = NULL;
+  public static $FE_PROXY_PORT = 0;
+  // Proxy authentication
+  public static $FE_PROXY_AUTH_METHOD = CURLAUTH_BASIC;
+  // No authentication by default.
+  public static $FE_PROXY_AUTH_TOKEN = NULL; //[user]:[passwd] for auth.
+
   // OAuth URLs
   function requestTokenURL() { return self::$FE_API_ROOT.'/oauth/request_token'; }
   function authorizeURL() { return self::$FE_ROOT.'/oauth/authorize'; }
@@ -378,11 +386,25 @@ class FireEagle {
       curl_setopt($ch, CURLOPT_POST, 1);
       curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     }
+    if (self::$FE_PROXY_HOST) {
+      curl_setopt($ch, CURLOPT_PROXY, self::$FE_PROXY_HOST);
+      curl_setopt($ch, CURLOPT_PROXYPORT, self::$FE_PROXY_PORT);
+      if (self::$FE_PROXY_AUTH_TOKEN) {
+        curl_setopt($ch, CURLOPT_PROXYUSERPWD, self::$FE_PROXY_AUTH_TOKEN);
+        curl_setopt($ch, CURLOPT_PROXYAUTH, self::$FE_PROXY_AUTH_METHOD);
+      }
+    }
     $response = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $ct = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
     if ($ct) $ct = preg_replace("/;.*/", "", $ct); // strip off charset
-    if (!$status) throw new FireEagleException("Connection to $url failed", FireEagleException::CONNECT_FAILED);
+    if (!$status) {
+      $e_msg = "Connection to $url failed.";
+      if (!self::$FE_PROXY_HOST) {
+        $e_msg .= " You may need to enable proxy access by setting the FireEagle::\$FE_PROXY_* variables.";
+      }
+      throw new FireEagleException($e_msg, FireEagleException::CONNECT_FAILED);
+    }
     if ($status != 200) {
       if ($ct == "application/json") {
 	$r = json_decode($response);
