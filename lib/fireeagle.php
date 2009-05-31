@@ -100,10 +100,15 @@ class FireEagleException extends Exception {
   }
 }
 
+/* The OAuth version that governs the OAuth dance */
+define("OAUTH_VERSION_10", 1); //The old version.
+define("OAUTH_VERSION_10A", 2); //The new OAuth version 1.0 Rev A.
+
 /**
  * FireEagle API access helper class.
  */
 class FireEagle {
+  public static $FE_OAUTH_VERSION = OAUTH_VERSION_10; //Default to older version.
 
   public static $FE_ROOT = "http://fireeagle.yahoo.net";
   public static $FE_API_ROOT = "https://fireeagle.yahooapis.com";
@@ -176,14 +181,27 @@ class FireEagle {
    * @returns a key/value pair array containing: oauth_token and
    * oauth_token_secret.
    */
-  public function getRequestToken() {
-    $r = $this->oAuthRequest($this->requestTokenURL());
+  public function getRequestToken($callback=NULL) {
+    $params = array();
+    if (self::$FE_OAUTH_VERSION == OAUTH_VERSION_10A) {
+      if (empty($callback)) $callback = 'oob';
+      $params['oauth_callback'] = $callback;
+    }
+    $r = $this->oAuthRequest($this->requestTokenURL(), $params);
     $token = $this->oAuthParseResponse($r);
+    if (self::$FE_OAUTH_VERSION == OAUTH_VERSION_10A) {
+      if (empty($token['oauth_callback_confirmed'])
+          || (strcmp($token['oauth_callback_confirmed'], 'true') != 0))
+        throw new FireEagleException("Fire Eagle server is not talking the correct protocol", FireEagleException::REMOTE_ERROR);
+    }
     $this->token = new OAuthConsumer($token['oauth_token'], $token['oauth_token_secret']); // use this token from now on
     if (self::$FE_DUMP_REQUESTS) self::dump("Now the user is redirected to ".$this->getAuthorizeURL($token['oauth_token'])."\nOnce the user returns, via the callback URL for web authentication or manually for desktop authentication, we can get their access token and secret by calling /oauth/access_token.\n\n");
     return $token;
   }
-  public function request_token() { return $this->getRequestToken(); }
+
+  public function request_token($callback=NULL) {
+    return $this->getRequestToken($callback);
+  }
 
   /**
    * Get the URL to redirect to to authorize the user and validate a
@@ -206,14 +224,20 @@ class FireEagle {
    * @returns array("oauth_token" => the access token,
    *                "oauth_token_secret" => the access secret)
    */
-  public function getAccessToken($token=NULL) {
+  public function getAccessToken($verifier=NULL) {
     $this->requireToken();
-    $r = $this->oAuthRequest($this->accessTokenURL());
+    $params = array();
+    if (self::$FE_OAUTH_VERSION == OAUTH_VERSION_10A) {
+      if (empty($verifier))
+        throw new FireEagleException("Access token verifier is empty", FireEagleException::REQUEST_FAILED);
+      $params['oauth_verifier'] = $verifier;
+    }
+    $r = $this->oAuthRequest($this->accessTokenURL(), $params);
     $token = $this->oAuthParseResponse($r);
     $this->token = new OAuthConsumer($token['oauth_token'], $token['oauth_token_secret']); // use this token from now on
     return $token;
   }
-  public function access_token() { return $this->getAccessToken(); }
+  public function access_token($verifier=NULL) { return $this->getAccessToken($verifier); }
 
   /**
    * Generic method call function.  You can use this to get the raw

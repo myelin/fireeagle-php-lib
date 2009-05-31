@@ -4,12 +4,26 @@ error_reporting(E_ALL);
 require_once dirname(__FILE__)."/../lib/fireeagle.php";
 
 function main() {
+    //To enable the new OAuth protocol, change the line at the end of this
+    //comment block. This tells FireEagle to use new OAuth protocol. Beware that
+    //this requires that you set the $fe_callback also. By default, the
+    //FireEagle class will behave as per the old OAUTH protocol. For details of
+    //the new OAuth, see the developer documentation at
+    //https://fireeagle.yahoo.net/developer/documentation/web_auth
+    FireEagle::$FE_OAUTH_VERSION = OAUTH_VERSION_10; //Use OAUTH_VERSION_10A for
+                                                     //new OAuth
 	
 	// hardcode your keys here
 	$fe_key = 'INSERT CONSUMER KEY HERE';
 	$fe_secret = 'INSERT CONSUMER SECRET HERE';
 
 	// or put them in walkthru_config.php, if you don't want to change this file
+
+    //For the new OAuth protocol, the URL registered at the Fire Eagle website
+    //for your web app will not work. Hardcode your application callback URL
+    //here. Don't forget to put '?f=callback'
+    $fe_callback = 'INSERT CALLBACK URL HERE'; //The string is ignored in old
+                                               //OAuth.
 	$cfn = dirname(__FILE__)."/walkthru_config.php";
 	if (file_exists($cfn)) require_once($cfn);
 	
@@ -20,7 +34,7 @@ function main() {
 		// get a request token + secret from FE and redirect to the authorization page
 		// START step 1
 		$fe = new FireEagle($fe_key, $fe_secret);
-		$tok = $fe->getRequestToken();
+		$tok = $fe->getRequestToken($fe_callback);
 		if (!isset($tok['oauth_token'])
 		    || !is_string($tok['oauth_token'])
 		    || !isset($tok['oauth_token_secret'])
@@ -44,16 +58,21 @@ function main() {
 			echo "Token mismatch.";
 			exit;
 		}
-		
+        if ((FireEagle::$FE_OAUTH_VERSION == OAUTH_VERSION_10A)
+            && !isset($_GET['oauth_verifier'])) {
+            echo "OAuth protocol error. No verifier in response.";
+            exit;
+        }
+
 		$fe = new FireEagle($fe_key, $fe_secret, $_SESSION['request_token'], $_SESSION['request_secret']);
-		$tok = $fe->getAccessToken();
+		$tok = $fe->getAccessToken($_GET['oauth_verifier']);
 		if (!isset($tok['oauth_token']) || !is_string($tok['oauth_token'])
 		    || !isset($tok['oauth_token_secret']) || !is_string($tok['oauth_token_secret'])) {
 			error_log("Bad token from FireEagle::getAccessToken(): ".var_export($tok, TRUE));
 			echo "ERROR! FireEagle::getAccessToken() returned an invalid response.  Giving up.";
 			exit;
 		}
-		
+
 		$_SESSION['access_token'] = $tok['oauth_token'];
 		$_SESSION['access_secret'] = $tok['oauth_token_secret'];
 		$_SESSION['auth_state'] = "done";
