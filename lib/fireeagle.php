@@ -108,7 +108,7 @@ define("OAUTH_VERSION_10A", 2); //The new OAuth version 1.0 Rev A.
  * FireEagle API access helper class.
  */
 class FireEagle {
-  public static $FE_OAUTH_VERSION = OAUTH_VERSION_10; //Default to older version.
+  public static $FE_OAUTH_VERSION = OAUTH_VERSION_10A; //Default to older version.
 
   public static $FE_ROOT = "http://fireeagle.yahoo.net";
   public static $FE_API_ROOT = "https://fireeagle.yahooapis.com";
